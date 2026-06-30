@@ -4,6 +4,9 @@ from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Float, JS
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
+def utc_now_naive():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
 class Organization(Base):
     __tablename__ = "organizations"
 
@@ -23,7 +26,7 @@ class Organization(Base):
     stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     subscription_plan: Mapped[str] = mapped_column(String(50), default="free")
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
@@ -49,7 +52,7 @@ class User(Base):
     # RBAC: Super Admin, Tenant Admin, Manager, Supervisor, Agent, Viewer, Developer, API User
     role: Mapped[str] = mapped_column(String(50), default="Agent")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     
     organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
     
@@ -86,7 +89,7 @@ class Agent(Base):
     interrupt_handling: Mapped[bool] = mapped_column(Boolean, default=True)
     silence_timeout: Mapped[float] = mapped_column(Float, default=0.6)  # Seconds of silence before user finishes speaking
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
@@ -109,7 +112,7 @@ class Contact(Base):
     tags: Mapped[Optional[List[str]]] = mapped_column(JSON, default=list)
     custom_fields: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     organization: Mapped[Organization] = relationship("Organization", back_populates="contacts")
@@ -136,7 +139,7 @@ class Campaign(Base):
     time_zone_aware: Mapped[bool] = mapped_column(Boolean, default=True)
     
     scheduled_start: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     organization: Mapped[Organization] = relationship("Organization", back_populates="campaigns")
@@ -180,7 +183,7 @@ class PhoneNumber(Base):
     sip_password: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     organization: Mapped[Organization] = relationship("Organization", back_populates="phone_numbers")
@@ -206,7 +209,7 @@ class Call(Base):
     # External tracking (e.g. Twilio SID or LiveKit room name)
     sid: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -225,7 +228,7 @@ class CallTranscript(Base):
     
     role: Mapped[str] = mapped_column(String(20))  # system, agent, user
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
     latency_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Relationships
@@ -260,7 +263,7 @@ class Workflow(Base):
     graph_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     organization: Mapped[Organization] = relationship("Organization", back_populates="workflows")
@@ -274,7 +277,7 @@ class KnowledgeBase(Base):
     
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     organization: Mapped[Organization] = relationship("Organization", back_populates="knowledge_bases")
@@ -292,7 +295,7 @@ class KnowledgeDocument(Base):
     
     # Status: uploading, processing, ready, error
     status: Mapped[str] = mapped_column(String(50), default="processing")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     knowledge_base: Mapped[KnowledgeBase] = relationship("KnowledgeBase", back_populates="documents")
@@ -326,7 +329,7 @@ class APIKey(Base):
     hashed_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now_naive)
 
     # Relationships
     organization: Mapped[Organization] = relationship("Organization", back_populates="api_keys")

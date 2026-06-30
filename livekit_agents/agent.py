@@ -6,10 +6,8 @@ import httpx
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
-from livekit import agents
-from livekit.agents import JobContext, WorkerOptions, llm
-from livekit.agents.voice_assistant import VoiceAssistant
-from livekit.plugins import openai, deepgram, elevenlabs
+from livekit.agents import JobContext, WorkerOptions, cli, llm, VoiceAssistant
+from livekit.plugins import openai, deepgram, elevenlabs, silero
 
 load_dotenv()
 
@@ -130,7 +128,7 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     logger.info("Connected to room successfully.")
 
-    # 3. Setup STT, LLM, and TTS
+    # 3. Setup STT, LLM, TTS and Silero VAD
     stt = deepgram.STT()
     
     llm_instance = openai.LLM(
@@ -142,14 +140,17 @@ async def entrypoint(ctx: JobContext):
         voice_id=agent_config.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
     )
     
+    vad_plugin = silero.VAD.load()
+    
     # Create chat context with the customized System Prompt
-    chat_context = openai.ChatContext().append(
+    chat_context = llm.ChatContext().append(
         role="system",
         text=agent_config.get("system_prompt", "You are a helpful AI assistant.")
     )
 
-    # 4. Instantiate Assistant Loop
+    # 4. Instantiate VoiceAssistant (LiveKit 1.6.x API structure)
     assistant = VoiceAssistant(
+        vad=vad_plugin,
         llm=llm_instance,
         stt=stt,
         tts=tts,
@@ -160,9 +161,10 @@ async def entrypoint(ctx: JobContext):
     )
 
     # 5. Connect handlers to log and broadcast transcripts in real-time
-    @assistant.on("user_speech_finished")
-    def on_user_speech_finished(event):
-        text = event.text.strip()
+    @assistant.on("user_speech_committed")
+    def on_user_speech_committed(msg: llm.ChatMessage):
+        # Extract plain string transcript from ChatMessage
+        text = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
         if text:
             logger.info(f"Customer: {text}")
             # Stream to Redis Pub/Sub for UI WebSockets
@@ -171,9 +173,10 @@ async def entrypoint(ctx: JobContext):
             # Persist to DB
             asyncio.create_task(save_transcript_line(call_id, "customer", text))
 
-    @assistant.on("agent_speech_finished")
-    def on_agent_speech_finished(event):
-        text = event.text.strip()
+    @assistant.on("agent_speech_committed")
+    def on_agent_speech_committed(msg: llm.ChatMessage):
+        # Extract plain string transcript from ChatMessage
+        text = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
         if text:
             logger.info(f"Agent: {text}")
             # Stream to Redis Pub/Sub for UI WebSockets
@@ -199,4 +202,4 @@ async def entrypoint(ctx: JobContext):
         await asyncio.sleep(1)
 
 if __name__ == "__main__":
-    agents.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
