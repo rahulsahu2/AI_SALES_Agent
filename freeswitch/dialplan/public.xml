@@ -1,0 +1,32 @@
+<include>
+  <!-- Public Context Dialplan for Inbound Routing -->
+  <context name="public">
+    
+    <extension name="inbound_did_lookup">
+      <!-- Matches any inbound phone number -->
+      <condition field="destination_number" expression="^(.*)$">
+        
+        <!-- Log incoming call event details -->
+        <action application="log" data="INFO Inbound call received for phone number: ${destination_number}"/>
+        
+        <!-- 1. Perform HTTP API check to FastAPI backend to check validation and provision room -->
+        <!-- In FreeSWITCH, we set the returned JSON variables as channel variables -->
+        <action application="curl" data="http://fastapi-api:8000/api/v1/telephony/inbound-token method post postdata 'phone=${destination_number}'"/>
+        
+        <!-- 2. Parse response and ensure room and token variables are set -->
+        <!-- If response returned room_name, we set it -->
+        <action application="set" data="lk_room_name=${curl_response_data:room_name}"/>
+        <action application="set" data="lk_token=${curl_response_data:token}"/>
+        
+        <!-- 3. If room_name is found, bridge to LiveKit SIP Gateway -->
+        <!-- LiveKit SIP Connector URI format: sip:<room_name>@sip.livekit.cloud -->
+        <action application="log" data="INFO Bridging call to LiveKit room: ${lk_room_name}"/>
+        <action application="bridge" data="sofia/external/sip:${lk_room_name}@sip.livekit.cloud"/>
+        
+        <!-- Hangup if bridge finishes or fails -->
+        <action application="hangup"/>
+      </condition>
+    </extension>
+
+  </context>
+</include>
