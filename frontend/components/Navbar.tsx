@@ -23,6 +23,7 @@ export default function Navbar({ currentTab, setTab }: NavbarProps) {
   const menuItems = [
     { id: "dashboard", label: "Realtime Monitor", icon: Activity },
     { id: "agents", label: "Agent Builder", icon: Sliders },
+    { id: "campaigns", label: "Calling Campaigns", icon: PhoneCall },
     { id: "contacts", label: "Contacts Registry", icon: Users },
     { id: "knowledge", label: "Knowledge RAG", icon: BookOpen },
     { id: "api-keys", label: "Developer Keys", icon: Key },

@@ -66,6 +66,25 @@ services:
       redis:
         condition: service_started
 
+  celery-beat:
+    build:
+      context: ./backend
+    container_name: voiceflow-beat
+    command: celery -A app.core.celery_app.celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=voiceflow
+      - REDIS_HOST=redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
   livekit-agent:
     build:
       context: ./livekit_agents

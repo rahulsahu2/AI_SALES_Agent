@@ -85,3 +85,13 @@ export const useAppStore = create<AppStore>((set) => ({
   
   clearActiveCalls: () => set({ activeCalls: {} })
 }));
+
+export const getApiUrl = () => {
+  if (typeof window !== "undefined") {
+    if (window.location.port === "3000") {
+      return "http://localhost:8000";
+    }
+    return window.location.origin;
+  }
+  return "http://localhost:8000";
+};

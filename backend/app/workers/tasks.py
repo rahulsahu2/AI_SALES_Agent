@@ -2,7 +2,7 @@ import asyncio
 import logging
 from app.core.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.models import Campaign, CampaignContact, Contact, Call, Agent, PhoneNumber, KnowledgeDocument
+from app.models.models import Campaign, CampaignContact, Contact, Call, Agent, PhoneNumber, KnowledgeDocument, utc_now_naive
 from app.services.rag_service import RAGService
 from sqlalchemy import select
 import httpx
@@ -151,3 +151,35 @@ def start_campaign_dialer(campaign_id: int):
     Celery task to run outbound dialer queues.
     """
     asyncio.run(_start_campaign_dialer_async(campaign_id))
+
+async def _check_scheduled_campaigns_async():
+    """
+    Async helper to check and activate scheduled campaigns.
+    """
+    async with SessionLocal() as db:
+        now = utc_now_naive()
+        # Find scheduled campaigns whose scheduled_start time has arrived
+        result = await db.execute(
+            select(Campaign)
+            .where(
+                Campaign.status == "scheduled",
+                Campaign.scheduled_start <= now
+            )
+        )
+        scheduled_campaigns = result.scalars().all()
+        
+        for campaign in scheduled_campaigns:
+            logger.info(f"Scheduled start reached for campaign {campaign.id} ({campaign.name}). Activating.")
+            campaign.status = "active"
+            db.add(campaign)
+            await db.commit()
+            
+            # Start background dialer
+            start_campaign_dialer.delay(campaign.id)
+
+@celery_app.task(name="tasks.check_scheduled_campaigns")
+def check_scheduled_campaigns():
+    """
+    Celery task to run periodically and check scheduled campaigns.
+    """
+    asyncio.run(_check_scheduled_campaigns_async())

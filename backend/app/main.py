@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import SessionLocal, engine, Base
 from app.core.security import get_password_hash
-from app.models.models import User, Organization
+from app.models.models import User, Organization, Agent, PhoneNumber
 from app.api.router import api_router
 
 app = FastAPI(
@@ -69,5 +69,27 @@ async def on_startup():
                 organization_id=default_org.id
             )
             session.add(admin_user)
+
+            # Create default agent
+            default_agent = Agent(
+                organization_id=default_org.id,
+                name="Sales Assistant",
+                system_prompt="You are a helpful sales assistant calling from VoiceFlow AI.",
+                greeting="Hello, I am calling to discuss your product interest.",
+                llm_model="gpt-4o",
+                temperature=0.7,
+                voice_id="21m00Tcm4TlvDq8ikWAM"
+            )
+            session.add(default_agent)
+
+            # Create default phone number
+            default_phone = PhoneNumber(
+                organization_id=default_org.id,
+                phone_number="+15550100",
+                label="Main Office Line",
+                provider="Twilio"
+            )
+            session.add(default_phone)
+            
             await session.commit()
-            print("Successfully bootstrapped default organization and admin user.")
+            print("Successfully bootstrapped default organization, admin user, agent, and phone number.")

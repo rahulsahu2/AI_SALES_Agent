@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAppStore } from "../lib/store";
+import { useAppStore, getApiUrl } from "../lib/store";
 import Navbar from "../components/Navbar";
 import Dashboard from "../components/Dashboard";
 import AgentBuilder from "../components/AgentBuilder";
 import Contacts from "../components/Contacts";
+import Campaigns from "../components/Campaigns";
 import KnowledgeBase from "../components/KnowledgeBase";
 import DeveloperConsole from "../components/DeveloperConsole";
 import Analytics from "../components/Analytics";
@@ -19,27 +20,51 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
 
-    // Simulate login verification against main.py bootstrapped admin credentials
-    setTimeout(() => {
-      if (email === "admin@voiceflow.ai" && password === "Admin123!") {
-        setToken("mock_jwt_web_token_data");
-        setUser({
-          id: 1,
-          email: "admin@voiceflow.ai",
-          full_name: "VoiceFlow Administrator",
-          role: "Tenant Admin",
-          organization_id: 1
-        });
-      } else {
-        setErrorMsg("Invalid username or password. Use default credentials.");
+    try {
+      const apiUrl = getApiUrl();
+      const formData = new URLSearchParams();
+      formData.append("username", email);
+      formData.append("password", password);
+
+      const loginRes = await fetch(`${apiUrl}/api/v1/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: formData.toString()
+      });
+
+      if (!loginRes.ok) {
+        const errorJson = await loginRes.json().catch(() => ({}));
+        throw new Error(errorJson.detail || "Incorrect email or password");
       }
+
+      const { access_token } = await loginRes.json();
+      
+      const userRes = await fetch(`${apiUrl}/api/v1/auth/me`, {
+        headers: {
+          "Authorization": `Bearer ${access_token}`
+        }
+      });
+
+      if (!userRes.ok) {
+        throw new Error("Failed to load user profile");
+      }
+
+      const userProfile = await userRes.json();
+      
+      setToken(access_token);
+      setUser(userProfile);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to log in. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   // Auth Guard
@@ -125,6 +150,8 @@ export default function Home() {
         return <Dashboard />;
       case "agents":
         return <AgentBuilder />;
+      case "campaigns":
+        return <Campaigns />;
       case "contacts":
         return <Contacts />;
       case "knowledge":
