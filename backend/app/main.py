@@ -41,7 +41,7 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # 2. Seed default admin and organization
+    # 2. Seed default admin, organization, agent, and phone number
     async with SessionLocal() as session:
         # Check if first superuser exists
         result = await session.execute(
@@ -49,6 +49,7 @@ async def on_startup():
         )
         existing_user = result.scalar_one_or_none()
         
+        org_id = None
         if not existing_user:
             # Create default organization
             default_org = Organization(
@@ -59,6 +60,7 @@ async def on_startup():
             )
             session.add(default_org)
             await session.flush()  # Populate default_org.id
+            org_id = default_org.id
             
             # Create admin user
             admin_user = User(
@@ -69,10 +71,17 @@ async def on_startup():
                 organization_id=default_org.id
             )
             session.add(admin_user)
+            await session.flush()
+            print("Bootstrapped default organization and admin user.")
+        else:
+            org_id = existing_user.organization_id
 
-            # Create default agent
+        # Verify at least one Agent configuration exists
+        agent_result = await session.execute(select(Agent).where(Agent.organization_id == org_id))
+        existing_agent = agent_result.scalar_one_or_none()
+        if not existing_agent:
             default_agent = Agent(
-                organization_id=default_org.id,
+                organization_id=org_id,
                 name="Sales Assistant",
                 system_prompt="You are a helpful sales assistant calling from VoiceFlow AI.",
                 greeting="Hello, I am calling to discuss your product interest.",
@@ -81,15 +90,20 @@ async def on_startup():
                 voice_id="21m00Tcm4TlvDq8ikWAM"
             )
             session.add(default_agent)
+            print("Bootstrapped default AI voice agent configuration.")
 
-            # Create default phone number
+        # Verify at least one PhoneNumber config exists
+        phone_result = await session.execute(select(PhoneNumber).where(PhoneNumber.organization_id == org_id))
+        existing_phone = phone_result.scalar_one_or_none()
+        if not existing_phone:
             default_phone = PhoneNumber(
-                organization_id=default_org.id,
+                organization_id=org_id,
                 phone_number="+15550100",
                 label="Main Office Line",
                 provider="Twilio"
             )
             session.add(default_phone)
+            print("Bootstrapped default outbound caller ID trunk configuration.")
             
-            await session.commit()
-            print("Successfully bootstrapped default organization, admin user, agent, and phone number.")
+        await session.commit()
+
