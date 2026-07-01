@@ -3,10 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
+from sqlalchemy.pool import NullPool
+
 # Create async database engine
 engine = create_async_engine(
     settings.SQLALCHEMY_DATABASE_URI,
-    pool_pre_ping=True,
+    poolclass=NullPool,
     echo=False
 )
 

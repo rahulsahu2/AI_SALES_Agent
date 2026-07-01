@@ -22,6 +22,7 @@ async def create_campaign(
     Create a new outbound calling Campaign and register its contacts queue.
     """
     # Create the campaign
+    scheduled_start_naive = campaign_in.scheduled_start.replace(tzinfo=None) if campaign_in.scheduled_start else None
     campaign = Campaign(
         organization_id=org_id,
         agent_id=campaign_in.agent_id,
@@ -31,7 +32,7 @@ async def create_campaign(
         max_retries=campaign_in.max_retries,
         retry_delay_minutes=campaign_in.retry_delay_minutes,
         time_zone_aware=campaign_in.time_zone_aware,
-        scheduled_start=campaign_in.scheduled_start,
+        scheduled_start=scheduled_start_naive,
         status="draft"
     )
     db.add(campaign)
@@ -92,6 +93,8 @@ async def update_campaign(
         
     old_status = campaign.status
     update_data = campaign_in.model_dump(exclude_unset=True)
+    if "scheduled_start" in update_data and update_data["scheduled_start"]:
+        update_data["scheduled_start"] = update_data["scheduled_start"].replace(tzinfo=None)
     
     for field, value in update_data.items():
         setattr(campaign, field, value)

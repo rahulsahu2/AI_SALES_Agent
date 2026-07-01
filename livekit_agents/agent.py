@@ -6,7 +6,8 @@ import httpx
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
-from livekit.agents import JobContext, WorkerOptions, cli, llm, VoiceAssistant
+from livekit.agents import JobContext, WorkerOptions, cli, llm, RunContext
+from livekit.agents.voice import Agent, AgentSession
 from livekit.plugins import openai, deepgram, elevenlabs, silero
 
 load_dotenv()
@@ -22,51 +23,61 @@ redis_client = aioredis.from_url(REDIS_URL)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY", "system_internal_secret")
 
-class AssistantTools(llm.FunctionContext):
-    """
-    Define custom actions/tools the agent can invoke mid-call.
-    """
-    def __init__(self, call_id: int):
-        super().__init__()
-        self.call_id = call_id
 
-    @llm.ai_callable(description="Transfer the call to a human support agent or supervisor SIP trunk.")
-    async def transfer_to_human(self, sip_address: str = "sip:101@localhost") -> str:
-        logger.info(f"Triggering human handoff to {sip_address} for call {self.call_id}")
-        
-        # Publish event to redis to notify the UI/backend of human handoff request
-        event = {
-            "event": "human_transfer",
-            "call_id": self.call_id,
-            "target": sip_address
-        }
-        await redis_client.publish(f"call_events_{self.call_id}", json.dumps(event))
-        
-        # Post transfer command to backend telephony API
-        async with httpx.AsyncClient() as client:
-            try:
-                await client.post(
-                    f"{BACKEND_URL}/api/v1/telephony/transfer",
-                    json={"call_id": self.call_id, "sip_address": sip_address},
-                    headers={"X-Internal-Key": INTERNAL_API_KEY}
-                )
-            except Exception as e:
-                logger.error(f"Failed to post human transfer webhook: {e}")
-                
-        return f"Transferring your call to a customer representative at {sip_address} now. Please hold."
+@llm.function_tool
+async def transfer_to_human(
+    ctx: RunContext,
+    sip_address: str = "sip:101@localhost"
+) -> str:
+    """
+    Transfer the call to a human support agent or supervisor SIP trunk.
+    """
+    call_id = ctx.userdata.get("call_id", 1)
+    logger.info(f"Triggering human handoff to {sip_address} for call {call_id}")
+    
+    # Publish event to redis to notify the UI/backend of human handoff request
+    event = {
+        "event": "human_transfer",
+        "call_id": call_id,
+        "target": sip_address
+    }
+    await redis_client.publish(f"call_events_{call_id}", json.dumps(event))
+    
+    # Post transfer command to backend telephony API
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.post(
+                f"{BACKEND_URL}/api/v1/telephony/transfer",
+                json={"call_id": call_id, "sip_address": sip_address},
+                headers={"X-Internal-Key": INTERNAL_API_KEY}
+            )
+        except Exception as e:
+            logger.error(f"Failed to post human transfer webhook: {e}")
+            
+    return f"Transferring your call to a customer representative at {sip_address} now. Please hold."
 
-    @llm.ai_callable(description="Save call outcome variables such as email, booking dates, or interest level.")
-    async def save_lead_variable(self, key: str, value: str) -> str:
-        logger.info(f"Saving variable for call {self.call_id}: {key} = {value}")
-        # Save variables to Redis and persist to DB
-        event = {
-            "event": "variable_update",
-            "call_id": self.call_id,
-            "key": key,
-            "value": value
-        }
-        await redis_client.publish(f"call_events_{self.call_id}", json.dumps(event))
-        return f"Successfully saved variable {key}."
+
+@llm.function_tool
+async def save_lead_variable(
+    ctx: RunContext,
+    key: str,
+    value: str
+) -> str:
+    """
+    Save call outcome variables such as email, booking dates, or interest level.
+    """
+    call_id = ctx.userdata.get("call_id", 1)
+    logger.info(f"Saving variable for call {call_id}: {key} = {value}")
+    # Save variables to Redis and persist to DB
+    event = {
+        "event": "variable_update",
+        "call_id": call_id,
+        "key": key,
+        "value": value
+    }
+    await redis_client.publish(f"call_events_{call_id}", json.dumps(event))
+    return f"Successfully saved variable {key}."
+
 
 async def fetch_agent_details(agent_id: int) -> dict:
     """
@@ -93,6 +104,7 @@ async def fetch_agent_details(agent_id: int) -> dict:
         "voice_id": "21m00Tcm4TlvDq8ikWAM",  # ElevenLabs default
     }
 
+
 async def save_transcript_line(call_id: int, role: str, message: str):
     """
     Post transcript line to FastAPI to persist in DB.
@@ -106,6 +118,7 @@ async def save_transcript_line(call_id: int, role: str, message: str):
             )
         except Exception as e:
             logger.error(f"Error saving transcript line: {e}")
+
 
 async def entrypoint(ctx: JobContext):
     logger.info(f"Agent job started for room: {ctx.room.name}")
@@ -148,49 +161,55 @@ async def entrypoint(ctx: JobContext):
         text=agent_config.get("system_prompt", "You are a helpful AI assistant.")
     )
 
-    # 4. Instantiate VoiceAssistant (LiveKit 1.6.x API structure)
-    assistant = VoiceAssistant(
-        vad=vad_plugin,
-        llm=llm_instance,
-        stt=stt,
-        tts=tts,
+    # 4. Instantiate Agent
+    agent = Agent(
+        instructions=agent_config.get("system_prompt", "You are a helpful AI assistant."),
         chat_ctx=chat_context,
-        fnc_ctx=AssistantTools(call_id=call_id),
-        allow_interruptions=agent_config.get("interrupt_handling", True),
-        fading_silence_secs=agent_config.get("silence_timeout", 0.6)
+        tools=[transfer_to_human, save_lead_variable]
     )
 
-    # 5. Connect handlers to log and broadcast transcripts in real-time
-    @assistant.on("user_speech_committed")
-    def on_user_speech_committed(msg: llm.ChatMessage):
-        # Extract plain string transcript from ChatMessage
-        text = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
-        if text:
-            logger.info(f"Customer: {text}")
+    # 5. Instantiate AgentSession
+    session = AgentSession(
+        stt=stt,
+        vad=vad_plugin,
+        llm=llm_instance,
+        tts=tts,
+        allow_interruptions=agent_config.get("interrupt_handling", True),
+        userdata={"call_id": call_id}
+    )
+
+    # 6. Connect handlers to log and broadcast transcripts in real-time
+    @session.on("conversation_item_added")
+    def on_conversation_item_added(event: livekit.agents.voice.events.ConversationItemAddedEvent):
+        if isinstance(event.item, llm.ChatMessage):
+            text = event.item.content.strip() if isinstance(event.item.content, str) else str(event.item.content).strip()
+            if not text:
+                return
+            
+            # Identify role
+            if event.item.role == "user":
+                role = "customer"
+                log_prefix = "Customer"
+            elif event.item.role == "assistant":
+                role = "agent"
+                log_prefix = "Agent"
+            else:
+                return
+                
+            logger.info(f"{log_prefix}: {text}")
             # Stream to Redis Pub/Sub for UI WebSockets
-            payload = json.dumps({"event": "transcript", "role": "customer", "message": text, "call_id": call_id})
+            payload = json.dumps({"event": "transcript", "role": role, "message": text, "call_id": call_id})
             asyncio.create_task(redis_client.publish(f"call_transcripts_{call_id}", payload))
             # Persist to DB
-            asyncio.create_task(save_transcript_line(call_id, "customer", text))
+            asyncio.create_task(save_transcript_line(call_id, role, text))
 
-    @assistant.on("agent_speech_committed")
-    def on_agent_speech_committed(msg: llm.ChatMessage):
-        # Extract plain string transcript from ChatMessage
-        text = msg.content.strip() if isinstance(msg.content, str) else str(msg.content).strip()
-        if text:
-            logger.info(f"Agent: {text}")
-            # Stream to Redis Pub/Sub for UI WebSockets
-            payload = json.dumps({"event": "transcript", "role": "agent", "message": text, "call_id": call_id})
-            asyncio.create_task(redis_client.publish(f"call_transcripts_{call_id}", payload))
-            # Persist to DB
-            asyncio.create_task(save_transcript_line(call_id, "agent", text))
-
-    # Start conversational loop
-    assistant.start(ctx.room)
+    # 7. Start the session in the room
+    await session.start(agent=agent, room=ctx.room)
+    logger.info("Agent session started successfully.")
     
-    # Trigger first greet
+    # 8. Trigger first greet
     greeting = agent_config.get("greeting", "Hello!")
-    await assistant.say(greeting, allow_interruptions=True)
+    await session.say(greeting, allow_interruptions=True)
     
     # Feed greeting to DB and Redis
     payload = json.dumps({"event": "transcript", "role": "agent", "message": greeting, "call_id": call_id})

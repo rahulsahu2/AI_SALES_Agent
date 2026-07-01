@@ -99,7 +99,7 @@ async def on_startup():
             default_phone = PhoneNumber(
                 organization_id=org_id,
                 phone_number="+15550100",
-                label="Main Office Line",
+                friendly_name="Main Office Line",
                 provider="Twilio"
             )
             session.add(default_phone)

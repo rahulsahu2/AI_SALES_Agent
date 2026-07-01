@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: Annotated[
         List[str], BeforeValidator(parse_cors)
-    ] = ["http://localhost:3000", "http://localhost:8000"]
+    ] = ["http://localhost:3000", "http://localhost:3001", "http://localhost:8000"]
 
     # Database
     POSTGRES_SERVER: str = "localhost"

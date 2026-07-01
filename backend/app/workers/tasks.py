@@ -112,7 +112,8 @@ async def _start_campaign_dialer_async(campaign_id: int):
             # Example API call payload to LiveKit Outbound SIP:
             try:
                 # Provision Call log
-                room_name = f"call_{campaign_id}_{cc.id}_outbound"
+                import uuid
+                room_name = f"call_{campaign_id}_{cc.id}_{uuid.uuid4().hex[:8]}_outbound"
                 call = Call(
                     organization_id=campaign.organization_id,
                     agent_id=campaign.agent_id,

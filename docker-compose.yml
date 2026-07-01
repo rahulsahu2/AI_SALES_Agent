@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: voiceflow
     ports:
-      - "5432:5432"
+      - "5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
     image: redis:7-alpine
     container_name: voiceflow-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redisdata:/data
 
@@ -96,6 +96,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - BACKEND_URL=http://backend:8000
       - INTERNAL_API_KEY=system_internal_secret
+      - LIVEKIT_URL=http://host.docker.internal:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=secret
     depends_on:
       - redis
       - backend
@@ -105,7 +108,7 @@ services:
       context: ./frontend
     container_name: voiceflow-frontend
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:

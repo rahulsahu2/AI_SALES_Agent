@@ -87,8 +87,11 @@ export const useAppStore = create<AppStore>((set) => ({
 }));
 
 export const getApiUrl = () => {
+  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
   if (typeof window !== "undefined") {
-    if (window.location.port === "3000") {
+    if (["3000", "3001"].includes(window.location.port)) {
       return "http://localhost:8000";
     }
     return window.location.origin;
