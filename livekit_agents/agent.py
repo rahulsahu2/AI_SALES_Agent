@@ -5,6 +5,7 @@ import json
 import httpx
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
+import livekit
 
 from livekit.agents import JobContext, WorkerOptions, cli, llm, RunContext
 from livekit.agents.voice import Agent, AgentSession
