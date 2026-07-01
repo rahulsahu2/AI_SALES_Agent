@@ -87,14 +87,14 @@ export const useAppStore = create<AppStore>((set) => ({
 }));
 
 export const getApiUrl = () => {
+  if (typeof window !== "undefined") {
+    // If accessed via a remote server IP/domain, direct API calls to that same IP/domain on port 8000
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return `http://${window.location.hostname}:8000`;
+    }
+  }
   if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof window !== "undefined") {
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return "http://localhost:8000";
-    }
-    return `http://${window.location.hostname}:8000`;
   }
   return "http://localhost:8000";
 };
