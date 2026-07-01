@@ -91,10 +91,10 @@ export const getApiUrl = () => {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   if (typeof window !== "undefined") {
-    if (["3000", "3001"].includes(window.location.port)) {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
       return "http://localhost:8000";
     }
-    return window.location.origin;
+    return `http://${window.location.hostname}:8000`;
   }
   return "http://localhost:8000";
 };
