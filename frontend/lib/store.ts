@@ -39,7 +39,7 @@ export const useAppStore = create<AppStore>((set) => ({
   token: typeof window !== "undefined" ? localStorage.getItem("token") : null,
   user: null,
   activeCalls: {},
-  
+
   setToken: (token) => set(() => {
     if (token) {
       localStorage.setItem("token", token);
@@ -48,16 +48,16 @@ export const useAppStore = create<AppStore>((set) => ({
     }
     return { token };
   }),
-  
+
   setUser: (user) => set({ user }),
-  
+
   addCall: (call) => set((state) => ({
     activeCalls: {
       ...state.activeCalls,
       [call.id]: call
     }
   })),
-  
+
   updateCallStatus: (callId, status) => set((state) => {
     const call = state.activeCalls[callId];
     if (!call) return state;
@@ -68,7 +68,7 @@ export const useAppStore = create<AppStore>((set) => ({
       }
     };
   }),
-  
+
   addTranscriptLine: (callId, line) => set((state) => {
     const call = state.activeCalls[callId];
     if (!call) return state;
@@ -82,7 +82,7 @@ export const useAppStore = create<AppStore>((set) => ({
       }
     };
   }),
-  
+
   clearActiveCalls: () => set({ activeCalls: {} })
 }));
 
@@ -96,5 +96,5 @@ export const getApiUrl = () => {
   if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
-  return "http://localhost:8000";
+  return "http://${window.location.hostname}:8000";
 };
