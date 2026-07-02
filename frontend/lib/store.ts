@@ -96,5 +96,5 @@ export const getApiUrl = () => {
   if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
-  return "http://${window.location.hostname}:8000";
+  return `http://${window.location.hostname}:8000`;
 };
