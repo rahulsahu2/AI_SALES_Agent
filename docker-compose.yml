@@ -26,6 +26,20 @@ services:
     volumes:
       - redisdata:/data
 
+  livekit:
+    image: livekit/livekit:latest
+    container_name: voiceflow-livekit
+    command: ["--dev", "--keys", "devkey: lk_api_secret_32_characters_long_for_security"]
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50050:50000-50050/udp"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7880/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
   backend:
     build:
       context: ./backend
@@ -41,16 +55,16 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=voiceflow
       - REDIS_HOST=redis
-      - LIVEKIT_URL=http://host.docker.internal:7880
+      - LIVEKIT_URL=http://livekit:7880
       - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      livekit:
+        condition: service_healthy
 
   celery-worker:
     build:
@@ -65,16 +79,16 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=voiceflow
       - REDIS_HOST=redis
-      - LIVEKIT_URL=http://host.docker.internal:7880
+      - LIVEKIT_URL=http://livekit:7880
       - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      livekit:
+        condition: service_healthy
 
   celery-beat:
     build:
@@ -89,16 +103,16 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=voiceflow
       - REDIS_HOST=redis
-      - LIVEKIT_URL=http://host.docker.internal:7880
+      - LIVEKIT_URL=http://livekit:7880
       - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      livekit:
+        condition: service_healthy
 
   livekit-agent:
     build:
@@ -111,14 +125,16 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - BACKEND_URL=http://backend:8000
       - INTERNAL_API_KEY=system_internal_secret
-      - LIVEKIT_URL=http://host.docker.internal:7880
+      - LIVEKIT_URL=http://livekit:7880
       - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=secret
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
     depends_on:
-      - redis
-      - backend
+      redis:
+        condition: service_started
+      backend:
+        condition: service_started
+      livekit:
+        condition: service_healthy
 
   frontend:
     build:
