@@ -26,20 +26,6 @@ services:
     volumes:
       - redisdata:/data
 
-  livekit:
-    image: livekit/livekit:latest
-    container_name: voiceflow-livekit
-    command: ["--dev", "--keys", "devkey: lk_api_secret_32_characters_long_for_security"]
-    ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "50000-50050:50000-50050/udp"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:7880/healthz || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-
   backend:
     build:
       context: ./backend
@@ -49,22 +35,13 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
-    environment:
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=voiceflow
-      - REDIS_HOST=redis
-      - LIVEKIT_URL=http://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
+    env_file:
+      - backend/.env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-      livekit:
-        condition: service_healthy
 
   celery-worker:
     build:
@@ -73,22 +50,13 @@ services:
     command: celery -A app.core.celery_app.celery_app worker --loglevel=info
     volumes:
       - ./backend:/app
-    environment:
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=voiceflow
-      - REDIS_HOST=redis
-      - LIVEKIT_URL=http://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
+    env_file:
+      - backend/.env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-      livekit:
-        condition: service_healthy
 
   celery-beat:
     build:
@@ -97,22 +65,13 @@ services:
     command: celery -A app.core.celery_app.celery_app beat --loglevel=info
     volumes:
       - ./backend:/app
-    environment:
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=voiceflow
-      - REDIS_HOST=redis
-      - LIVEKIT_URL=http://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
+    env_file:
+      - backend/.env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-      livekit:
-        condition: service_healthy
 
   livekit-agent:
     build:
@@ -121,20 +80,17 @@ services:
     command: python agent.py dev
     volumes:
       - ./livekit_agents:/app
+    env_file:
+      - backend/.env
     environment:
       - REDIS_URL=redis://redis:6379/0
       - BACKEND_URL=http://backend:8000
       - INTERNAL_API_KEY=system_internal_secret
-      - LIVEKIT_URL=http://livekit:7880
-      - LIVEKIT_API_KEY=devkey
-      - LIVEKIT_API_SECRET=lk_api_secret_32_characters_long_for_security
     depends_on:
       redis:
         condition: service_started
       backend:
         condition: service_started
-      livekit:
-        condition: service_healthy
 
   frontend:
     build:
